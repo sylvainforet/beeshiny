@@ -42,7 +42,7 @@ int main ( )
 
         // Tag segmentation: colour to gray conversion, smoothing, blocking reflection and thresholding
         cv::cvtColor ( frame, gray_frame, CV_BGR2GRAY );
-        gray_frame = cv::imread("/Users/u5305887/Movies/Output/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+        //gray_frame = cv::imread("/Users/u5305887/Movies/Output/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
         cv::GaussianBlur ( gray_frame, smoothed_frame, cv::Size ( 3, 3 ), 1, 1 );
         
         
