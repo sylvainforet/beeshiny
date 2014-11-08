@@ -58,7 +58,7 @@ int main ( )
             cv::Point ( 1658, smoothed_frame.rows ), 0, -1 );
         */
         //cv::resize(smoothed_frame, smoothed_frame, cv::Size(smoothed_frame.cols/2, smoothed_frame.rows/2)); 
-        //cv::imshow ( "video", smoothed_frame ); ////////////////////////////////////////////////////////////
+        //cv::imshow ( "video", smoothed_frame ); //
         
 
         //cv::imwrite ( "/Users/u5305887/Movies/Output/th.jpg", frame );
