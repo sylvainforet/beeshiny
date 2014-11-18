@@ -7,13 +7,6 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <tbb/tbb.h>
-#include <tbb/parallel_for.h>
-
-#include <opencv2/nonfree/nonfree.hpp>
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/objdetect/objdetect.hpp>
-#include <thread>
 
 class BeeTag
 {
@@ -22,14 +15,17 @@ class BeeTag
         cv::Scalar colour;
         std::vector < cv::Point2f > locations;
         std::vector < int > frame_number;
-        int tag_type;
+        std::vector < int > tag_type;
         std::vector < cv::Mat > all_tags;
+        cv::Point2f last_location;
+        int last_frame;
 
     public:
         BeeTag ( int, cv::Point2f, int, cv::Scalar, int );
 
         int retrieve_id ( );
         int retrieve_tag_type ( );
+        std::vector < int > retrieve_all_tags ( );
         cv::Point2f retrieve_location ( );
         int retrieve_frame ( );
         std::vector < cv::Point2f > get_all_locations ( );
