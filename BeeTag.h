@@ -31,8 +31,7 @@ class BeeTag
         std::vector < cv::Point2f > get_all_locations ( );
         std::vector < int > get_all_frames (  );
         cv::Scalar retrieve_colour ( );
-        void update_location_frame ( cv::Point2f, int );
-        void update_classification ( int );
+        void update_location_frame_classification ( cv::Point2f, int, int );
         void append_all_locations_frames ( std::vector < cv::Point2f >, std::vector < int > );
         void store_tags ( cv::Mat );
         std::vector < cv::Mat > get_all_tags ( );

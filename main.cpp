@@ -56,7 +56,7 @@ int main ( )
         std::vector < cv::Vec4i > hierarchy;
         cv::findContours ( thresh_frame, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, cv::Point( 0, 0 ) ); // CV_RETR_LIST
 
-        std::vector < BeeTag * > newBees ( contours.size ( ) );
+        std::vector < BeeTag * > newBees ( contours.size ( ), nullptr );
         BeeTag *newBee = nullptr;
         //BeeTag *newBee = nullptr;
         //BeeTag *aBee = new BeeTag ( 1, cv::Point( 0, 0 ), 1, cv::Scalar(255,255,255), 1 );
@@ -70,22 +70,14 @@ int main ( )
                 //std::cout << newBees[i]->retrieve_id() << std::endl;
                 //delete newBee;
             }
-            else 
-            {
-                newBees[i] = nullptr;
-            }
 
         }
 
         for ( int i = 0; i < newBees.size ( ); i++ )
         {
-            if (newBees[i] == NULL)
+            if ( newBees[i] != NULL )
             {
-                std::cout << "NULL" << std::endl;
-            }
-            else
-            {
-                std::cout << newBees[i]->retrieve_id() << std::endl;
+                allBees.push_back ( *newBees[i] );
             }
         }
 
@@ -159,9 +151,9 @@ BeeTag *classify_locate_bee ( std::vector < cv::Point > each_contour, cv::Mat gr
     if ( allBees.empty ( ) )
     {
         cv::Scalar assign_colour = cv::Scalar ( rng.uniform ( 0, 255 ), rng.uniform ( 0, 255 ) , rng.uniform ( 0, 255 ) );
-        BeeTag newBee ( beeID, locate, frame_number, assign_colour, classification );
+        //BeeTag newBee ( beeID, locate, frame_number, assign_colour, classification );
         BeeTag *anewBee = new BeeTag ( beeID, locate, frame_number, assign_colour, classification );
-        allBees.push_back( newBee );
+        //allBees.push_back( newBee );
         beeID++;
         return anewBee;
     }
@@ -201,16 +193,15 @@ BeeTag *classify_locate_bee ( std::vector < cv::Point > each_contour, cv::Mat gr
     int search_radius_size = SEARCH_SURROUNDING_AREA;
     if ( closest_match < search_radius_size )
     {
-        allBees[tag_number].update_location_frame ( locate, frame_number );
-        allBees[tag_number].update_classification ( classification ); // append to vector
+        allBees[tag_number].update_location_frame_classification ( locate, frame_number, classification );
         return nullptr;
     }
     else
     {
         cv::Scalar assign_colour = cv::Scalar ( rng.uniform ( 0, 255 ), rng.uniform ( 0, 255 ) , rng.uniform ( 0, 255 ) );
-        BeeTag newBee ( beeID, locate, frame_number, assign_colour, classification );
+        //BeeTag newBee ( beeID, locate, frame_number, assign_colour, classification );
         BeeTag *anewBee = new BeeTag ( beeID, locate, frame_number, assign_colour, classification );
-        allBees.push_back( newBee );
+        //allBees.push_back( newBee );
         beeID++;
         return anewBee;
     }

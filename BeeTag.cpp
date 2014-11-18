@@ -53,16 +53,12 @@ cv::Scalar BeeTag::retrieve_colour ( )
     return colour;
 }
 
-void BeeTag::update_location_frame ( cv::Point2f location, int frame )
+void BeeTag::update_location_frame_classification ( cv::Point2f location, int frame, int classify )
 {
     locations.push_back ( location );
     frame_number.push_back ( frame );
     last_location = location;
     last_frame = frame;
-}
-
-void BeeTag::update_classification ( int classify )
-{
     tag_type.push_back ( classify ) ;
 }
 
