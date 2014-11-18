@@ -57,10 +57,7 @@ int main ( )
         cv::findContours ( thresh_frame, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, cv::Point( 0, 0 ) ); // CV_RETR_LIST
 
         std::vector < BeeTag * > newBees ( contours.size ( ), nullptr );
-        BeeTag *newBee = nullptr;
-        //BeeTag *newBee = nullptr;
-        //BeeTag *aBee = new BeeTag ( 1, cv::Point( 0, 0 ), 1, cv::Scalar(255,255,255), 1 );
-        //delete *
+
         for ( int i = 0; i < contours.size ( ); i++ )
         {
             double area = cv::contourArea ( contours[i] );
