@@ -1,4 +1,0 @@
-BeeShiny
-========
-
-Honeybee tracking system
