@@ -4,18 +4,17 @@
 #define L_TAG 1
 #define STAR_TAG 2
 #define QUEEN_TAG 3
+#define FRAMES_BEFORE_EXTINCTION 250
+#define SEARCH_SURROUNDING_AREA 200
+cv::RNG rng ( 12345 );
 
-int classify_locate_bee ( std::vector < cv::Point >, cv::Mat, int, cv::Scalar, std::vector < BeeTag > &, int &, std::vector < std::vector < cv::Point > > );
+BeeTag * classify_locate_bee ( std::vector < cv::Point >, cv::Mat, int, std::vector < BeeTag > &, int &, std::vector < std::vector < cv::Point > > );
 float distance_between_tags ( cv::Point2f, cv::Point2f );
-//void add_bee ( std::vector < BeeTag > &, int, cv::Point2f, int, cv::Scalar, int );
-//bool identify_past_location ( std::vector < BeeTag > &, std::vector < BeeTag >, BeeTag, int );
 cv::Mat draw_circles ( cv::Mat, std::vector < BeeTag >, int );
 void write_csv ( std::vector < BeeTag >, int );
 
-
 int main ( )
 {
-    //std::thread all_threads[num_threads];
 
     cv::VideoCapture cap ( "/Users/u5305887/Movies/C0003.MP4" );
 
@@ -29,7 +28,6 @@ int main ( )
 
     cv::namedWindow ( "video", CV_WINDOW_NORMAL );
     // seed random colour generator 
-    cv::RNG rng ( 12345 );
     int frame_count = 0;
     int bee_identities = 0;
     std::vector < BeeTag > allBees;
@@ -58,18 +56,40 @@ int main ( )
         std::vector < cv::Vec4i > hierarchy;
         cv::findContours ( thresh_frame, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, cv::Point( 0, 0 ) ); // CV_RETR_LIST
 
-        //std::vector < BeeTag > newBees;
-
+        std::vector < BeeTag * > newBees ( contours.size ( ) );
+        BeeTag *newBee = nullptr;
+        //BeeTag *newBee = nullptr;
+        //BeeTag *aBee = new BeeTag ( 1, cv::Point( 0, 0 ), 1, cv::Scalar(255,255,255), 1 );
+        //delete *
         for ( int i = 0; i < contours.size ( ); i++ )
         {
             double area = cv::contourArea ( contours[i] );
             if ( area > 4 ) // filter out small reflective regions of honey
             {
-                cv::Scalar assign_colour = cv::Scalar( rng.uniform ( 0, 255 ), rng.uniform ( 0, 255 ) , rng.uniform ( 0, 255 ) );
-                int success = classify_locate_bee ( contours[i], gray_frame, frame_count, assign_colour, allBees, bee_identities, contours );
+                newBees[i] = classify_locate_bee ( contours[i], gray_frame, frame_count, allBees, bee_identities, contours );
+                //std::cout << newBees[i]->retrieve_id() << std::endl;
+                //delete newBee;
+            }
+            else 
+            {
+                newBees[i] = nullptr;
             }
 
         }
+
+        for ( int i = 0; i < newBees.size ( ); i++ )
+        {
+            if (newBees[i] == NULL)
+            {
+                std::cout << "NULL" << std::endl;
+            }
+            else
+            {
+                std::cout << newBees[i]->retrieve_id() << std::endl;
+            }
+        }
+
+        std::vector < BeeTag* > ( ) .swap ( newBees ) ;
 
         std::cout << frame_count << " " << allBees.size ( ) << std::endl;
 
@@ -93,9 +113,9 @@ int main ( )
 }
 
 
-int classify_locate_bee ( std::vector < cv::Point > each_contour, cv::Mat grayscale_frame, int frame_number, cv::Scalar newcolour, std::vector < BeeTag > &allBees, int &beeID, std::vector < std::vector < cv::Point > > all_contours )
+BeeTag *classify_locate_bee ( std::vector < cv::Point > each_contour, cv::Mat grayscale_frame, int frame_number, std::vector < BeeTag > &allBees, int &beeID, std::vector < std::vector < cv::Point > > all_contours )
 {
-    cv::RotatedRect surrounding_rectangle = cv::minAreaRect( cv::Mat( each_contour ) );
+    cv::RotatedRect surrounding_rectangle = cv::minAreaRect( cv::Mat ( each_contour ) );
     cv::Point2f locate = surrounding_rectangle.center;
     int classification;
 
@@ -138,10 +158,12 @@ int classify_locate_bee ( std::vector < cv::Point > each_contour, cv::Mat graysc
 
     if ( allBees.empty ( ) )
     {
-        BeeTag newBee ( beeID, locate, frame_number, newcolour, classification );
+        cv::Scalar assign_colour = cv::Scalar ( rng.uniform ( 0, 255 ), rng.uniform ( 0, 255 ) , rng.uniform ( 0, 255 ) );
+        BeeTag newBee ( beeID, locate, frame_number, assign_colour, classification );
+        BeeTag *anewBee = new BeeTag ( beeID, locate, frame_number, assign_colour, classification );
         allBees.push_back( newBee );
         beeID++;
-        return 0;
+        return anewBee;
     }
 
     int tag_number;
@@ -154,7 +176,7 @@ int classify_locate_bee ( std::vector < cv::Point > each_contour, cv::Mat graysc
         frames_since_last_seen = frame_number - allBees[i].retrieve_frame ( );
         bool better_match_available = false;
         double closeness_of_tag = distance_between_tags ( locate, last_location_of_bee );
-        if ( frames_since_last_seen < 125 && closeness_of_tag <= closest_match )
+        if ( frames_since_last_seen < FRAMES_BEFORE_EXTINCTION && closeness_of_tag <= closest_match )
         {
             for ( int j = 0; j < all_contours.size ( ); j++ )
             {
@@ -176,19 +198,22 @@ int classify_locate_bee ( std::vector < cv::Point > each_contour, cv::Mat graysc
         }
     }
 
-    int search_radius_size = (frames_since_last_seen * 2) + 25;
+    int search_radius_size = SEARCH_SURROUNDING_AREA;
     if ( closest_match < search_radius_size )
     {
         allBees[tag_number].update_location_frame ( locate, frame_number );
         allBees[tag_number].update_classification ( classification ); // append to vector
+        return nullptr;
     }
     else
     {
-        BeeTag newBee ( beeID, locate, frame_number, newcolour, classification );
+        cv::Scalar assign_colour = cv::Scalar ( rng.uniform ( 0, 255 ), rng.uniform ( 0, 255 ) , rng.uniform ( 0, 255 ) );
+        BeeTag newBee ( beeID, locate, frame_number, assign_colour, classification );
+        BeeTag *anewBee = new BeeTag ( beeID, locate, frame_number, assign_colour, classification );
         allBees.push_back( newBee );
         beeID++;
+        return anewBee;
     }
-    return 0;
 }
 
 float distance_between_tags ( cv::Point2f first_tag, cv::Point2f second_tag )
@@ -202,7 +227,7 @@ cv::Mat draw_circles ( cv::Mat original_frame, std::vector < BeeTag > allBees, i
     for ( int i = 0; i < allBees.size ( ); i++ )
     {
         int frames_since_last_seen = frame_number - allBees[i].retrieve_frame ( );
-        if ( frames_since_last_seen < 125 ) {
+        if ( frames_since_last_seen < FRAMES_BEFORE_EXTINCTION ) {
             cv::circle ( original_frame, allBees[i].retrieve_location ( ), 16, allBees[i].retrieve_colour ( ), 3, 8, 0 );
             cv::putText ( original_frame, std::to_string ( allBees[i].retrieve_tag_type ( ) ), allBees[i].retrieve_location ( ), CV_FONT_HERSHEY_COMPLEX, 2, cv::Scalar ( 255, 255, 255 ), 5, 8 );
         }
