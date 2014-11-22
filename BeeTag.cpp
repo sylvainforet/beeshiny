@@ -1,71 +1,85 @@
 #ifndef BEETAG_H
 #include "BeeTag.h"
 
-BeeTag::BeeTag ( int id, cv::Point2f initial_location, int initial_frame, cv::Scalar tag_colour, int tag )
+BeeTag::BeeTag                                          (int id, 
+                                                        cv::Point2f initial_location, 
+                                                        int initial_frame, 
+                                                        cv::Scalar circle_colour, 
+                                                        int tag_classified)
 {
     identity = id;
-    frame_number.push_back ( initial_frame );
-    locations.push_back ( initial_location );
-    last_frame = initial_frame;
-    last_location = initial_location;
-    colour = tag_colour;
-    tag_type.push_back ( tag );
+    all_frame_numbers.push_back (initial_frame);
+    all_tag_locations.push_back (initial_location);
+    last_frame_found = initial_frame;
+    last_location_found = initial_location;
+    colour = circle_colour;
+    all_tags_identified.push_back (tag_classified);
+    tag_type = tag_classified;
 }
 
-int BeeTag::retrieve_id ( )
+void BeeTag::update_location_frame_classification       (cv::Point2f new_location,
+                                                        int new_frame,
+                                                        int new_classification)
+{
+    all_tag_locations.push_back (new_location);
+    all_frame_numbers.push_back (new_frame);
+    last_location_found = new_location;
+    last_frame_found = new_frame;
+    all_tags_identified.push_back (new_classification);
+    tag_type = new_classification;
+}
+
+void BeeTag::clear_stored_objects                       (void)
+{
+    all_tag_locations.clear ();
+    all_frame_numbers.clear ();
+    all_tags_identified.clear ();
+}
+
+BeeTag::~BeeTag                                         (void)
+{
+    std::cout << "Deleting Object" << std::endl;
+}
+
+int BeeTag::get_id (void)
 {
     return identity;
 }
 
-int BeeTag::retrieve_tag_type ( )
-{
-    return tag_type.back ( );
-}
-
-std::vector < int > BeeTag::retrieve_all_tags ( )
+int BeeTag::get_tag_type                                (void)
 {
     return tag_type;
 }
 
-cv::Point2f BeeTag::retrieve_location ( )
+std::vector<int> BeeTag::get_all_tags                   (void)
 {
-    return last_location;
+    return all_tags_identified;
 }
 
-int BeeTag::retrieve_frame ( )
+cv::Point2f BeeTag::get_last_location                   (void)
 {
-    return last_frame;
+    return last_location_found;
 }
 
-std::vector < cv::Point2f > BeeTag::get_all_locations ( )
+int BeeTag::get_last_frame                              (void)
 {
-    return locations;
+    return last_frame_found;
 }
 
-std::vector < int > BeeTag::get_all_frames ( )
+std::vector<cv::Point2f> BeeTag::get_all_locations      (void)
 {
-    return frame_number;
+    return all_tag_locations;
+}
+
+std::vector<int> BeeTag::get_all_frames                 (void)
+{
+    return all_frame_numbers;
 }
 
 
-cv::Scalar BeeTag::retrieve_colour ( )
+cv::Scalar BeeTag::get_circle_colour                    (void)
 {
     return colour;
-}
-
-void BeeTag::update_location_frame_classification ( cv::Point2f location, int frame, int classify )
-{
-    locations.push_back ( location );
-    frame_number.push_back ( frame );
-    last_location = location;
-    last_frame = frame;
-    tag_type.push_back ( classify ) ;
-}
-
-void BeeTag::append_all_locations_frames ( std::vector < cv::Point2f > all_new_locations, std::vector < int > all_new_frames )
-{
-    locations.insert ( locations.end ( ), all_new_locations.begin ( ), all_new_locations.end ( ) );
-    frame_number.insert ( frame_number.end ( ), all_new_frames.begin ( ),  all_new_frames.end ( ) );
 }
 
 #endif
