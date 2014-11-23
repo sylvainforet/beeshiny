@@ -20,6 +20,8 @@ static BeeTag* classify_locate_bee  (std::vector<cv::Point> each_contour,
                                     std::vector<std::vector<cv::Point>> all_contours, 
                                     cv::RNG colour_seed);
 
+//bool identify_past_location ( std::vector < BeeTag > &, cv::Point2f, int, int, std::vector < cv::Point2f > );
+
 static float distance_between_tags  (cv::Point2f first_tag,
                                     cv::Point2f second_tag);
 
