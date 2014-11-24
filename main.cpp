@@ -9,6 +9,7 @@
 #define L_TAG                       1
 #define STAR_TAG                    2
 #define QUEEN_TAG                   3
+#define FRAMES_BEFORE_CLEAR_MEMORY  20000
 #define FRAMES_BEFORE_EXTINCTION    250
 #define SEARCH_SURROUNDING_AREA     200
 
@@ -30,7 +31,7 @@ static cv::Mat draw_circles         (cv::Mat original_frame,
                                     std::vector<BeeTag> allBees,
                                     int frame_number);
 
-static void write_csv               (std::vector<BeeTag> allBees,
+static void write_csv               (std::vector<BeeTag> &allBees,
                                     int all_frames,
                                     char *csv_argument);
 
@@ -85,16 +86,14 @@ int main (int argc, char *argv[])
         std::vector<cv::Vec4i> hierarchy;
         cv::findContours (thresh_frame, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, cv::Point (0, 0)); // CV_RETR_LIST
 
-        //std::vector<BeeTag*> newBees (contours.size (), nullptr);
         cv::Point2f *tag_locations[contours.size ()];
         int tag_classifications[contours.size ()];
         for (int i = 0; i < contours.size (); i++)
         {
-            double area = cv::contourArea (contours[i]);
-            if (area > 4)
+            if (cv::contourArea (contours[i]) > 4)
             {
                 cv::Point2f new_location = classify_locate_bee (contours[i], gray_frame, tag_classifications[i]);
-                tag_locations[i] = new cv::Point2f (new_location);
+                tag_locations[i] = new cv::Point2f(new_location);
             }
             else
             {
@@ -111,6 +110,7 @@ int main (int argc, char *argv[])
             if (tag_locations[i] != nullptr)
             {
                 new_bee_found[i] = identify_past_location (allBees, tag_locations, tag_classifications, i, contours.size (), frame_count);
+
             }
             else
             {
@@ -118,20 +118,17 @@ int main (int argc, char *argv[])
             }
         }
 
-        
-
         for (int i = 0; i < contours.size (); i++)
-        {   
+        {
             if (new_bee_found[i] == true)
             {
-
                 cv::Scalar assign_colour = cv::Scalar (rng.uniform (0, 255), rng.uniform (0, 255) , rng.uniform (0, 255));
                 BeeTag newBee (bee_identities, *tag_locations[i], frame_count, assign_colour, tag_classifications[i]);
-                bee_identities++;
                 allBees.push_back (newBee);
+                bee_identities++;
+                delete tag_locations[i];
             }
         }
-        delete[] *tag_locations; // pointer?
 
         std::cout << frame_count << " " << allBees.size () << std::endl;
 
@@ -146,7 +143,7 @@ int main (int argc, char *argv[])
         
         frame_count++;
 
-        if (frame_count % 20000 == 0)
+        if (frame_count % FRAMES_BEFORE_CLEAR_MEMORY == 0)
         {
             std::cout << "Writing CSV" << std::endl;
             write_csv (allBees, frame_count, argv[3]);
@@ -243,9 +240,9 @@ bool identify_past_location     (std::vector<BeeTag> &allBees,
         {
             for (int j = 0; j < number_of_contours; j++)
             {
-                if (tags_found[i] != nullptr)
+                if (tags_found[j] != nullptr)
                 {
-                    cv::Point2f alternate_location =  *tags_found[i];
+                    cv::Point2f alternate_location =  *tags_found[j];
                     float closeness_to_other_tag = distance_between_tags (alternate_location, last_location_of_bee);
                     if (*tags_found[iterator] != alternate_location && closeness_to_other_tag < closeness_of_tag)
                     {
@@ -265,7 +262,6 @@ bool identify_past_location     (std::vector<BeeTag> &allBees,
         }
 
     }
-
 
     int search_radius_size = SEARCH_SURROUNDING_AREA;
     if (closest_match < search_radius_size)
@@ -306,7 +302,7 @@ cv::Mat draw_circles            (cv::Mat original_frame,
     return original_frame;
 }
 
-void write_csv                  (std::vector<BeeTag> allBees,
+void write_csv                  (std::vector<BeeTag> &allBees,
                                 int all_frames,
                                 char *csv_argument)
 {
@@ -329,16 +325,16 @@ void write_csv                  (std::vector<BeeTag> allBees,
 
     output_csv.close ();
 
-    allBees.erase (std::remove_if (allBees.begin (), allBees.end (), [all_frames](BeeTag i)->bool
+    allBees.erase (std::remove_if (allBees.begin (), allBees.end (), [all_frames](BeeTag bee)->bool
         {
-            int frames_since_last_seen = all_frames - i.get_last_frame ();
+            int frames_since_last_seen = all_frames - bee.get_last_frame ();
             if (frames_since_last_seen > FRAMES_BEFORE_EXTINCTION)
             {
                 return true;
             }
             else
             {
-                i.clear_stored_objects();
+                bee.clear_stored_objects();
                 return false;
             }
         }
