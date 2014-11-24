@@ -38,7 +38,7 @@ void BeeTag::clear_stored_objects                       (void)
 
 BeeTag::~BeeTag                                         (void)
 {
-    std::cout << "Deleting Object" << std::endl;
+    //std::cout << "Deleting Object" << std::endl;
 }
 
 int BeeTag::get_id (void)
