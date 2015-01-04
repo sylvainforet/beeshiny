@@ -3,8 +3,7 @@
 
 BeeTag::BeeTag                                          (int id, 
                                                         cv::Point2f initial_location, 
-                                                        int initial_frame, 
-                                                        cv::Scalar circle_colour, 
+                                                        int initial_frame,
                                                         int tag_classified)
 {
     identity = id;
@@ -12,7 +11,6 @@ BeeTag::BeeTag                                          (int id,
     all_tag_locations.push_back (initial_location);
     last_frame_found = initial_frame;
     last_location_found = initial_location;
-    colour = circle_colour;
     all_tags_identified.push_back (tag_classified);
     tag_type = tag_classified;
 }
@@ -36,10 +34,10 @@ void BeeTag::clear_stored_objects                       (void)
     all_tags_identified.clear ();
 }
 
-BeeTag::~BeeTag                                         (void)
-{
-    //std::cout << "Deleting Object" << std::endl;
-}
+//BeeTag::~BeeTag                                         (void)
+//{
+ //   std::cout << "Deleting Object" << std::endl;
+//}
 
 int BeeTag::get_id (void)
 {
@@ -74,12 +72,6 @@ std::vector<cv::Point2f> BeeTag::get_all_locations      (void)
 std::vector<int> BeeTag::get_all_frames                 (void)
 {
     return all_frame_numbers;
-}
-
-
-cv::Scalar BeeTag::get_circle_colour                    (void)
-{
-    return colour;
 }
 
 #endif

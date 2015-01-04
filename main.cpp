@@ -6,22 +6,25 @@
 #include "BeeTag.h"
 
 #define UNKNOWN_TAG                 0
-#define L_TAG                       1
-#define STAR_TAG                    2
+#define O_TAG                       1
+#define I_TAG                       2
 #define QUEEN_TAG                   3
-#define FRAMES_BEFORE_CLEAR_MEMORY  20000
-#define FRAMES_BEFORE_EXTINCTION    250
-#define SEARCH_SURROUNDING_AREA     200
+#define MIN_CONTOUR_AREA            20
+#define MORPH_TRANSFORM_SIZE        27
+#define FRAMES_BEFORE_CLEAR_MEMORY  20001
+#define FRAMES_BEFORE_EXTINCTION    500
+#define SEARCH_SURROUNDING_AREA     500
+#define SEARCH_EXPANSION_BY_FRAME   80
+#define MIN_TAG_CLASSIFICATION_SIZE 22
 
 cv::Point2f classify_locate_bee     (std::vector<cv::Point> each_contour,
-                                    cv::Mat grayscale_frame,
+                                    cv::Mat thresh_shape_frame,
                                     int &classify_tag);
 
 bool identify_past_location         (std::vector<BeeTag> &allBees,
-                                    cv::Point2f *tags_found[],
-                                    int classify[],
+                                    std::vector<cv::Point2f> tags_found_location,
+                                    std::vector<int> classify,
                                     int iterator,
-                                    int number_of_contours,
                                     int frame_number);
 
 static float distance_between_tags  (cv::Point2f first_tag,
@@ -43,8 +46,18 @@ int main (int argc, char *argv[])
         return -1;
     }
 
+    char answer;
+    std::cout << "Have you changed the name of the input and output video and csv file so you do not overwrite previous analysis? (Y/N) ";
+    //std::cin >> answer;
+    answer = 'Y'; // delete later
+    if (answer != 'Y')
+    {
+        std::cout << "Exiting program" << std::endl;
+        return -1;
+    }
+
     cv::VideoCapture cap (argv[1]);
-    cv::VideoWriter output_cap (argv[2], CV_FOURCC ('X', 'V', 'I', 'D'), 25, cv::Size (3840, 2160), true);
+    cv::VideoWriter output_cap (argv[2], CV_FOURCC ('X', 'V', 'I', 'D'), 25, cv::Size (3840, 2160), false);
     cv::namedWindow ("video", CV_WINDOW_NORMAL);
 
     std::ofstream output_csv;
@@ -60,79 +73,110 @@ int main (int argc, char *argv[])
 
     int frame_count = 0;
     int bee_identities = 0;
-    cv::RNG rng (12345);
     std::vector<BeeTag> allBees;
+    cv::Mat frame, gray_frame, smooth_frame, thresh_frame, thresh_shape, output_frame;
+    cv::Mat close_element = cv::getStructuringElement (cv::MORPH_RECT, cv::Size (MORPH_TRANSFORM_SIZE, MORPH_TRANSFORM_SIZE)); //ELLIPSE
 
-    while(1)
+    while (1)
     {
-        cv::Mat frame, gray_frame, smoothed_frame, thresh_frame, output_frame;
-        
         bool succeed = cap.read (frame);
         if(!succeed) 
         {
             std::cout << "Exiting at " << frame_count << std::endl;
             break;
         }
+/*
+        if (frame_count % 5 != 0)
+        {
+            frame_count++;
+            continue;
+        }
+        6155
+*/
 
         // Tag segmentation: colour to gray conversion, smoothing,closing and blocking reflection and thresholding
         cv::cvtColor (frame, gray_frame, CV_BGR2GRAY);
-        cv::GaussianBlur (gray_frame, smoothed_frame, cv::Size (3, 3), 1, 1);
+        //cv::GaussianBlur (gray_frame, smooth_frame, cv::Size (5, 5), 1, 1);
+        //cv::blur (gray_frame, smooth_frame, cv::Size (7, 7));
+        //cv::medianBlur (gray_frame, smooth_frame, 5);
+        //output_cap.write (smooth_frame);
+        /*
+        cv::rectangle (smooth_frame, 
+                       cv::Point (gray_frame.cols - 550, 0),
+                       cv::Point (gray_frame.cols, gray_frame.rows), 0, -1);
 
-        cv::threshold (smoothed_frame, thresh_frame, 90, 255, CV_THRESH_BINARY);
-        cv::Mat close_element = cv::getStructuringElement (cv::MORPH_ELLIPSE, cv::Size (11, 11));
-        cv::morphologyEx (thresh_frame, thresh_frame, cv::MORPH_CLOSE, close_element);
-
+        cv::rectangle (smooth_frame, 
+                       cv::Point (gray_frame.cols - 1560, gray_frame.rows - 30),
+                       cv::Point (gray_frame.cols - 1525, gray_frame.rows), 0, -1);
+        // covers base
+        cv::rectangle (smooth_frame, 
+                       cv::Point (0, gray_frame.rows - 100),
+                       cv::Point (gray_frame.cols, gray_frame.rows), 0, -1);
+        */
+        //cv::blur (gray_frame, smooth_frame, cv::Size (5, 5));
+        cv::threshold (gray_frame, thresh_frame, 90, 255, CV_THRESH_BINARY);
+        cv::blur (thresh_frame, thresh_frame, cv::Size (19, 19));
+        cv::threshold (thresh_frame, thresh_frame, 90, 255, CV_THRESH_BINARY);
+        //cv::morphologyEx (thresh_frame, thresh_frame, cv::MORPH_CLOSE, close_element);
+        //output_cap.write (thresh_frame);
+        //
+        //cv::blur (thresh_frame, thresh_frame, cv::Size (19, 19));
+        //cv::threshold (thresh_frame, thresh_frame, 50, 255, CV_THRESH_BINARY);
+        cv::threshold (gray_frame, thresh_shape, 180, 255, CV_THRESH_BINARY_INV);
+        //cv::morphologyEx (thresh_frame, thresh_frame, cv::MORPH_CLOSE, close_element);
+        
+        cv::Mat ero = cv::getStructuringElement (cv::MORPH_CROSS, cv::Size (5, 5)); //ELLIPSE
+        //cv::morphologyEx (thresh_shape, thresh_shape, cv::MORPH_OPEN, ero);
+        cv::erode (thresh_shape, thresh_shape, ero);
+        //output_cap.write (thresh_shape);
+        
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
+ 
         cv::findContours (thresh_frame, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, cv::Point (0, 0)); // CV_RETR_LIST
 
-        cv::Point2f *tag_locations[contours.size ()];
-        int tag_classifications[contours.size ()];
+        std::vector<cv::Point2f> tag_locations;
+        std::vector<int> tag_classifications;
+        //std::cout << "Good1" << std::endl;
         for (int i = 0; i < contours.size (); i++)
         {
-            if (cv::contourArea (contours[i]) > 4)
+            if (cv::contourArea (contours[i]) > MIN_CONTOUR_AREA)
             {
-                cv::Point2f new_location = classify_locate_bee (contours[i], gray_frame, tag_classifications[i]);
-                tag_locations[i] = new cv::Point2f(new_location);
-            }
-            else
-            {
-                tag_locations[i] = nullptr;
-                tag_classifications[i] = UNKNOWN_TAG;
+                //cv::Point2f new_location = classify_locate_bee (contours[i], thresh_shape, tag_classifications[i]);
+                //tag_locations[i] = new cv::Point2f(new_location);
+                //std::cout << "working\n" << std::endl;
+                int classified; // passed by reference
+                cv::Point2f located = classify_locate_bee (contours[i], thresh_shape, classified);
+                tag_locations.push_back (located);
+                tag_classifications.push_back (classified);
+                //std::cout << cv::contourArea (contours[i]) << std::endl;
             }
 
         }
 
-        bool new_bee_found[contours.size ()];
+        //std::cout << "Good2" << std::endl;
 
-        for (int i = 0; i < contours.size (); i++)
+        //std::cout << tag_locations.size () << std::endl;
+
+        //std::vector<bool> new_bee_found;
+        //bool new_bee_found[contours.size ()];
+        
+        for (int i = 0; i < tag_locations.size (); i++)
         {
-            if (tag_locations[i] != nullptr)
+            bool new_bee_found = identify_past_location (allBees, tag_locations, tag_classifications, i, frame_count);
+            //std::cout << new_bee_found << std::endl;
+            if (new_bee_found == true)
             {
-                new_bee_found[i] = identify_past_location (allBees, tag_locations, tag_classifications, i, contours.size (), frame_count);
-
-            }
-            else
-            {
-                new_bee_found[i] = false;
-            }
-        }
-
-        for (int i = 0; i < contours.size (); i++)
-        {
-            if (new_bee_found[i] == true)
-            {
-                cv::Scalar assign_colour = cv::Scalar (rng.uniform (0, 255), rng.uniform (0, 255) , rng.uniform (0, 255));
-                BeeTag newBee (bee_identities, *tag_locations[i], frame_count, assign_colour, tag_classifications[i]);
+                BeeTag newBee (bee_identities, tag_locations[i], frame_count, tag_classifications[i]);
                 allBees.push_back (newBee);
                 bee_identities++;
-                delete tag_locations[i];
             }
         }
-
+        
         std::cout << frame_count << " " << allBees.size () << std::endl;
+        
 
-        output_frame = draw_circles (frame, allBees, frame_count);
+        output_frame = draw_circles (gray_frame, allBees, frame_count);
         output_cap.write (output_frame);
 
         if (cv::waitKey (1) == 27)
@@ -159,114 +203,164 @@ int main (int argc, char *argv[])
 
 
 cv::Point2f classify_locate_bee (std::vector<cv::Point> each_contour,
-                                cv::Mat grayscale_frame,
+                                cv::Mat thresh_shape_frame,
                                 int &classify_tag)
 
 {
     cv::RotatedRect surrounding_rectangle = cv::minAreaRect (cv::Mat(each_contour));
     cv::Point2f locate = surrounding_rectangle.center;
-    int classification;
+    //int classification;
 
-    if (surrounding_rectangle.size.width < 8 || surrounding_rectangle.size.height < 8)
+    if (surrounding_rectangle.size.width < MIN_TAG_CLASSIFICATION_SIZE || surrounding_rectangle.size.height < MIN_TAG_CLASSIFICATION_SIZE)
     {
-        classification = UNKNOWN_TAG;
-        classify_tag = classification;
+        //classification = UNKNOWN_TAG;
+        //classify_tag = classification;
+        classify_tag = 1000;
         return locate;
     }
 
     else
     {
+        //std::cout << "Good3" << std::endl;
+
+        
+/*
         long int value = 0;
-        for (int row = locate.y - 4; row < locate.y + 4; row++)
+        for (int row = locate.y - 15; row < locate.y + 15; row++)
         {
-            uchar *pix = grayscale_frame.ptr<uchar>(row);
-            for (int col = locate.x - 4; col < locate.x + 4; col++)
+            uchar *pix = thresh_shape_frame.ptr<uchar>(row);
+            for (int col = locate.x - 15; col < locate.x + 15; col++)
             {
                 value += int(pix[col]);
             }
         }
+
+        */
+        cv::Rect roi = cv::Rect (locate.x - 10, locate.y - 10, 20, 20);
+        cv::Mat tag_area = thresh_shape_frame (roi);
         
+
+        std::vector<std::vector<cv::Point>> contours2;
+        std::vector<cv::Vec4i> hierarchy2;
+        cv::findContours (tag_area, contours2, hierarchy2, CV_RETR_LIST, CV_CHAIN_APPROX_NONE, cv::Point (0, 0)); // CV_RETR_EXTERNAL
+        int largest_area = 0;
+        int largest_contour_index;
+        //std::cout << contours2.size() << std::endl;
+        for (int i = 0; i < contours2.size (); i++) // iterate through each contour. 
+        {
+            float a = contourArea (contours2[i]);  //  Find the area of contour
+            if (a > largest_area)
+            {
+                largest_area = a;
+                largest_contour_index = i;
+            }
+        }
+        if (largest_area > 3)
+        {
+            cv::RotatedRect surrounding_rectangle2 = cv::minAreaRect (cv::Mat(contours2[largest_contour_index]));
+            int found;
+            //std::cout << surrounding_rectangle2.size.width << " " << surrounding_rectangle2.size.height << "\n" << std::endl;
+            if (surrounding_rectangle2.size.width >= surrounding_rectangle2.size.height)
+            {
+                classify_tag = surrounding_rectangle2.size.width;
+                return locate;
+            }
+            else 
+            {
+                classify_tag = surrounding_rectangle2.size.height;
+                return locate;
+            }
+        }
+        else
+        {
+            classify_tag = 1000;
+            return locate;
+        }
+        
+    
+
+        //cv::imwrite ("/Users/u5305887/Movies/Output/train_test.jpg", tag_area);
+        //std::cout << "writing" << std::endl;
+        //classify_tag = cv::countNonZero (tag_area);
+        //classify_tag = value;
+        /*
         int tag_identified;
-        if (value> 14000)
+        if (value > 10000)
         {
             classification = QUEEN_TAG;
         }
-        else if (value < 6000)
+        else if (value < 4500)
         {
-            classification = STAR_TAG;
+            classification = O_TAG;
         }
         else if (value > 7000 && value < 9500)
         {
-            classification = L_TAG;
+            classification = I_TAG;
         }
         else
         {
             classification = UNKNOWN_TAG;
         }
-        classify_tag = classification;
-        return locate;
+        */
 
     }
 
 }
 
 bool identify_past_location     (std::vector<BeeTag> &allBees,
-                                cv::Point2f *tags_found[],
-                                int classify[],
+                                std::vector<cv::Point2f> tags_found_location,
+                                std::vector<int> classify,
                                 int iterator,
-                                int number_of_contours,
                                 int frame_number)
-
 {
 
     if (allBees.empty ())
     {
         return true;
-        
     }
 
-    int tag_number;
+    cv::Point2f current_tag_contour =  tags_found_location[iterator];
+    int tag_best_match_position;
     int frames_since_last_seen;
-    double closest_match  = 10000000.0;
+    float closest_match_distance = 100000;
+    bool found_bee_previously = false;
 
     for (int i = 0; i < allBees.size (); i++)
     {
-        
         cv::Point2f last_location_of_bee = allBees[i].get_last_location ();
         frames_since_last_seen = frame_number - allBees[i].get_last_frame ();
         bool better_match_available = false;
-        double closeness_of_tag = distance_between_tags (*tags_found[iterator], last_location_of_bee);
-        if (frames_since_last_seen < FRAMES_BEFORE_EXTINCTION && closeness_of_tag <= closest_match)
+        float closeness_of_tag_to_current_contour = distance_between_tags (current_tag_contour, last_location_of_bee);
+        //std::cout << closeness_of_tag_to_current_contour << std::endl;
+
+        if (frames_since_last_seen < FRAMES_BEFORE_EXTINCTION && closeness_of_tag_to_current_contour < closest_match_distance)
         {
-            for (int j = 0; j < number_of_contours; j++)
+            for (int j = 0; j < tags_found_location.size (); j++)
             {
-                if (tags_found[j] != nullptr)
+                float closeness_to_other_tag = distance_between_tags (tags_found_location[j], last_location_of_bee);
+                if (closeness_to_other_tag < closeness_of_tag_to_current_contour && iterator != j)
                 {
-                    cv::Point2f alternate_location =  *tags_found[j];
-                    float closeness_to_other_tag = distance_between_tags (alternate_location, last_location_of_bee);
-                    if (*tags_found[iterator] != alternate_location && closeness_to_other_tag < closeness_of_tag)
-                    {
-                        better_match_available = true;
-                        break;
-                    }
+                    better_match_available = true;
+                    break;
                 }
-
-                if (!better_match_available)
-                {
-                    tag_number = i;
-                    closest_match = closeness_of_tag;
-                }
-
             }
-
+            if (!better_match_available)
+            {
+                tag_best_match_position = i;
+                closest_match_distance = closeness_of_tag_to_current_contour;
+                found_bee_previously = true;
+            }
+            //found_bee_previously = true;
         }
+
 
     }
 
-    int search_radius_size = SEARCH_SURROUNDING_AREA;
-    if (closest_match < search_radius_size)
+    //int expand_search_radius = (frames_since_last_seen * SEARCH_EXPANSION_BY_FRAME) + SEARCH_EXPANSION_BY_FRAME;
+    //found_bee_previously && //  && expand_search_radius > closest_match_distance
+    if (found_bee_previously && closest_match_distance < SEARCH_SURROUNDING_AREA)
     {
-        allBees[tag_number].update_location_frame_classification (*tags_found[iterator], frame_number, classify[iterator]);
+        allBees[tag_best_match_position].update_location_frame_classification (tags_found_location[iterator], frame_number, classify[iterator]);
         return false;
     }
     else
@@ -292,11 +386,9 @@ cv::Mat draw_circles            (cv::Mat original_frame,
         int frames_since_last_seen = frame_number - allBees[i].get_last_frame ();
         if( frames_since_last_seen < FRAMES_BEFORE_EXTINCTION) 
         {
-            cv::circle (original_frame, allBees[i].get_last_location(), 16, 
-                        allBees[i].get_circle_colour (), 3, 8, 0);
-            cv::putText (original_frame, std::to_string(allBees[i].get_tag_type ()), 
-                        allBees[i].get_last_location (), CV_FONT_HERSHEY_COMPLEX, 2, 
-                        cv::Scalar(255, 255, 255), 5, 8);
+            cv::putText (original_frame, std::to_string(allBees[i].get_tag_type ()), //get_id ()
+                         cv::Point(allBees[i].get_last_location ().x + 20, allBees[i].get_last_location ().y + 20), CV_FONT_HERSHEY_COMPLEX, 2, 
+                         255, 5, 8);
         }
     }
     return original_frame;

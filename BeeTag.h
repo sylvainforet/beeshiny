@@ -16,7 +16,6 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-//#include <omp.h> -fopenmp
 
 #ifndef __BEE_TAG__
 #define __BEE_TAG__
@@ -25,16 +24,15 @@ class BeeTag
 {
     public:
         BeeTag                                      (int id,
-                                                    cv::Point2f initial_location,
-                                                    int initial_frame,
-                                                    cv::Scalar circle_colour,
-                                                    int tag_classified);
+                                                     cv::Point2f initial_location,
+                                                     int initial_frame,
+                                                     int tag_classified);
 
         void update_location_frame_classification   (cv::Point2f new_location,
-                                                    int new_frame,
-                                                    int new_classification);
+                                                     int new_frame,
+                                                     int new_classification);
 
-        virtual ~BeeTag                             (void);
+        //virtual ~BeeTag                             (void);
         int get_id                                  (void);
         int get_tag_type                            (void);
         std::vector<int> get_all_tags               (void);
@@ -47,7 +45,6 @@ class BeeTag
         
     private:
         int identity;
-        cv::Scalar colour;
         std::vector<cv::Point2f> all_tag_locations;
         std::vector<int> all_frame_numbers;
         std::vector<int> all_tags_identified;
