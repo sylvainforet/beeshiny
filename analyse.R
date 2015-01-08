@@ -1,5 +1,9 @@
-setwd("/Volumes/drive0/caffeine/output/14/")
-data <- read.csv("1.csv", header=T)
+rm(list=ls())
+setwd("/Users/u5305887/Movies/cam2/")
+data12 <- read.csv("12.csv", header=T)
+data13 <- read.csv("13.csv", header=T)
+data14 <- read.csv("14.csv", header=T)
+data15 <- read.csv("14.csv", header=T)
 
 # calculate time bees are tracked
 split_data <- split(data[3], data$BeeID)

@@ -42,6 +42,9 @@ class BeeTag
         std::vector<int> get_all_frames             (void);
         cv::Scalar get_circle_colour                (void);
         void clear_stored_objects                   (void);
+        void delete_bee                             (void);
+        bool get_deleted_status                     (void);
+
         
     private:
         int identity;
@@ -51,6 +54,7 @@ class BeeTag
         int tag_type;
         cv::Point2f last_location_found;
         int last_frame_found;
+        bool bee_deleted = false;
 
 };
 
