@@ -5,7 +5,7 @@
 
 #include "BeeTag.h"
 
-#define VERSION                     1.0
+#define VERSION                     1.1
 #define UNKNOWN_TAG                 0
 #define O_TAG                       1
 #define I_TAG                       2
@@ -64,8 +64,8 @@ int main (int argc, char *argv[])
 
     std::ofstream output_csv;
     output_csv.open (argv[3]);
-    output_csv << "BeeID" << "," << "Tag" << "," << "frame" << "," << "X" << "," << "Y";
-    output_csv << "\n" << "# Version: " << VERSION << "\n #File: " << argv[1] << "\n# Date: " << "18 December 2014 8:03 pm";
+    output_csv << "BeeID" << "," << "Tag" << "," << "Frame" << "," << "X" << "," << "Y";
+    output_csv << "\n" << "# Version: " << VERSION << " File: " << argv[1] << " Date: " << "18 December 2014 1:33 pm";
     output_csv.close ();
     
     if (!cap.isOpened ())
@@ -430,7 +430,7 @@ bool identify_past_location     (std::vector<BeeTag> &allBees,
     int expand_search_radius = (best_match_frames_since_last_seen * SEARCH_EXPANSION_BY_FRAME) + SEARCH_EXPANSION_BY_FRAME;
     if (found_bee_previously && expand_search_radius > closest_match_distance) //allBees[tag_best_match_position].get_deleted_status ()
     {
-        allBees[tag_best_match_position].update_location_frame_classification (tags_found_location[iterator], frame_number, classify[iterator]);
+        allBees[tag_best_match_position].update_location_frame_classification (tags_found_location[iterator], frame_number, classify[iterator], closest_match_distance);
         if (have_to_delete_bee)
         {
             allBees[tag_best_match_position].delete_bee ();
@@ -481,17 +481,18 @@ void write_csv                  (std::vector<BeeTag> &allBees,
         std::vector<cv::Point2f> every_location_of_bee = allBees[i].get_all_locations ();
         std::vector<int> all_frames_bee_present = allBees[i].get_all_frames ();
         std::vector<int> all_tags_classified = allBees[i].get_all_tags ();
+        std::vector<float> distances_travelled = allBees[i].get_distance_travelled ();
 
         for (int j = 0; j < all_frames_bee_present.size (); j++)
         {
-            output_csv << "\n" << allBees[i].get_id () << "," << all_tags_classified[j] << "," << all_frames_bee_present[j] << "," <<every_location_of_bee[j].x << "," << every_location_of_bee[j].y;
+            output_csv << "\n" << allBees[i].get_id () << "," << all_tags_classified[j] << "," << all_frames_bee_present[j] << "," << every_location_of_bee[j].x << "," << every_location_of_bee[j].y;
         }
 
     }
 
     output_csv.close ();
 
-    allBees.erase (std::remove_if (allBees.begin (), allBees.end (), [all_frames](BeeTag bee)->bool
+    allBees.erase (std::remove_if (allBees.begin (), allBees.end (), [all_frames](BeeTag &bee)->bool
         {
             int frames_since_last_seen = all_frames - bee.get_last_frame ();
             if (frames_since_last_seen > FRAMES_BEFORE_EXTINCTION)
@@ -500,7 +501,8 @@ void write_csv                  (std::vector<BeeTag> &allBees,
             }
             else
             {
-                bee.clear_stored_objects();
+                bee.clear_stored_objects ();
+                //std::cout << "done" << std::endl;
                 return false;
             }
         }

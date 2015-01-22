@@ -30,7 +30,8 @@ class BeeTag
 
         void update_location_frame_classification   (cv::Point2f new_location,
                                                      int new_frame,
-                                                     int new_classification);
+                                                     int new_classification,
+                                                     float distance);
 
         //virtual ~BeeTag                             (void);
         int get_id                                  (void);
@@ -44,6 +45,7 @@ class BeeTag
         void clear_stored_objects                   (void);
         void delete_bee                             (void);
         bool get_deleted_status                     (void);
+        std::vector<float> get_distance_travelled   (void);
 
         
     private:
@@ -51,6 +53,7 @@ class BeeTag
         std::vector<cv::Point2f> all_tag_locations;
         std::vector<int> all_frame_numbers;
         std::vector<int> all_tags_identified;
+        std::vector<float> distance_travelled;
         int tag_type;
         cv::Point2f last_location_found;
         int last_frame_found;

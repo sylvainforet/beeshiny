@@ -9,6 +9,7 @@ BeeTag::BeeTag                                          (int id,
     identity = id;
     all_frame_numbers.push_back (initial_frame);
     all_tag_locations.push_back (initial_location);
+    distance_travelled.push_back (0.0);
     last_frame_found = initial_frame;
     last_location_found = initial_location;
     all_tags_identified.push_back (tag_classified);
@@ -17,10 +18,12 @@ BeeTag::BeeTag                                          (int id,
 
 void BeeTag::update_location_frame_classification       (cv::Point2f new_location,
                                                         int new_frame,
-                                                        int new_classification)
+                                                        int new_classification,
+                                                        float distance)
 {
     all_tag_locations.push_back (new_location);
     all_frame_numbers.push_back (new_frame);
+    distance_travelled.push_back (distance);
     last_location_found = new_location;
     last_frame_found = new_frame;
     all_tags_identified.push_back (new_classification);
@@ -32,6 +35,7 @@ void BeeTag::clear_stored_objects                       (void)
     all_tag_locations.clear ();
     all_frame_numbers.clear ();
     all_tags_identified.clear ();
+    distance_travelled.clear ();
 }
 
 //BeeTag::~BeeTag                                         (void)
@@ -82,6 +86,11 @@ std::vector<cv::Point2f> BeeTag::get_all_locations      (void)
 std::vector<int> BeeTag::get_all_frames                 (void)
 {
     return all_frame_numbers;
+}
+
+std::vector<float> BeeTag::get_distance_travelled       (void)
+{
+    return distance_travelled;
 }
 
 #endif
