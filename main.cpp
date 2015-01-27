@@ -444,12 +444,22 @@ bool identify_past_location     (std::vector<BeeTag> &allBees,
 
 }
 
-float distance_between_tags     (cv::Point2f first_tag,
+float distance_between_tags (cv::Point2f first_tag,
                                 cv::Point2f second_tag)
 {
     float distance = sqrt (pow ((first_tag.x - second_tag.x), 2) + pow ((first_tag.y - second_tag.y), 2));
     return distance;
 }
+
+float simple_distance_between_tags (cv::Point2f first_tag,
+                                cv::Point2f second_tag)
+{
+    float dist_x = first_tag.x - second_tag.x;
+    float dist_y = first_tag.y - second_tag.y;
+    float distance = dist_x * dist_x + dist_y * dist_y;
+    return distance;
+}
+
 
 cv::Mat draw_circles            (cv::Mat original_frame,
                                 std::vector<BeeTag> allBees,
