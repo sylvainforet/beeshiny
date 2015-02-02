@@ -18,7 +18,8 @@ BeeTag::BeeTag (int id,
     tags.push_back (tag);
 }
 
-void BeeTag::add_point (cv::Point2f location,
+void
+BeeTag::add_point (cv::Point2f location,
                         int frame,
                         int classification)
 {
@@ -30,57 +31,67 @@ void BeeTag::add_point (cv::Point2f location,
     tag_type = classification;
 }
 
-void BeeTag::clear (void)
+void
+BeeTag::clear (void)
 {
     locations.clear ();
     frames.clear ();
     tags.clear ();
 }
 
-void BeeTag::delete_bee (void)
+void
+BeeTag::delete_bee (void)
 {
     deleted = true;
 }
 
-bool BeeTag::is_deleted (void) const
+bool
+BeeTag::is_deleted (void) const
 {
     return deleted;
 }
 
-int BeeTag::get_id (void) const
+int
+BeeTag::get_id (void) const
 {
     return identity;
 }
 
-int BeeTag::get_tag_type (void) const
+int
+BeeTag::get_tag_type (void) const
 {
     return tag_type;
 }
 
-std::vector<int> BeeTag::get_tags (void) const
+std::vector<int>&
+BeeTag::get_tags (void)
 {
     return tags;
 }
 
-cv::Point2f BeeTag::get_last_location (void) const
+const cv::Point2f&
+BeeTag::get_last_location (void) const
 {
     return last_location;
 }
 
-int BeeTag::get_last_frame (void) const
+int
+BeeTag::get_last_frame (void) const
 {
     return last_frame;
 }
 
-std::vector<cv::Point2f> BeeTag::get_locations (void) const
+std::vector<cv::Point2f>&
+BeeTag::get_locations (void)
 {
     return locations;
 }
 
-std::vector<int> BeeTag::get_frames (void) const
+std::vector<int>&
+BeeTag::get_frames (void)
 {
     return frames;
 }
 
-/* vim:ts=4:sw=4:sts=4:expandtab:
+/* vim:ts=4:sw=4:sts=4:expandtab:cinoptions=(0
  */

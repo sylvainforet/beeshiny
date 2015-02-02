@@ -1,548 +1,87 @@
 /**
- * JS 2014
- * This does this and that ...
+ * Main
  */
 
-#include <time.h>
-#include <pthread.h>
-#include <sys/time.h>
+#include <iostream>
+#include <string>
 
-#include <boost/timer/timer.hpp>
-#include <boost/program_options.hpp>
+#include "boost/program_options.hpp"
 
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-
-#include "BeeTag.h"
-
-
-#define VERSION                     1.1
-
-#define UNKNOWN_TAG                 0
-#define O_TAG                       1
-#define I_TAG                       2
-#define QUEEN_TAG                   3
-
-#define MIN_CONTOUR_AREA            60
-#define MORPH_TRANSFORM_SIZE        15
-#define FRAMES_BEFORE_CLEAR_MEMORY  20000
-#define FRAMES_BEFORE_EXTINCTION    500
-#define SEARCH_SURROUNDING_AREA     500
-#define SEARCH_EXPANSION_BY_FRAME   50
-#define MIN_TAG_CLASSIFICATION_SIZE 22
-#define MIN_CLOSENESS_BEFORE_DELETE 40
-
-#define FRAMES_PER_THREAD           10
-
-
-namespace po = boost::program_options;
-
-// Data structure to pass data to individual threads
-struct FindCountoursArgs
-{
-    cv::Mat frames[FRAMES_PER_THREAD];
-    std::vector<cv::Point2f> locations[FRAMES_PER_THREAD];
-    std::vector<int> classifications[FRAMES_PER_THREAD];
-    size_t n_frames = 0;
-};
-
-
-static cv::Point2f classify_locate_bee  (const std::vector<cv::Point> &each_contour,
-                                         const cv::Mat &thresh_shape_frame,
-                                         int &classify_tag);
-
-static bool identify_past_location      (std::vector<BeeTag> &all_bees,
-                                         std::vector<cv::Point2f> tag_locations,
-                                         std::vector<int> tag_classifications,
-                                         size_t iterator,
-                                         size_t frame_number);
-
-static float distance_between_tags      (const cv::Point2f &first_tag,
-                                         const cv::Point2f &second_tag);
-
-static void write_csv_header            (const char *csv,
-                                         const char *input);
-
-static void write_csv_chunk             (const char *csv,
-                                         std::vector<BeeTag> &all_bees,
-                                         int frame_count);
-
-static void* find_countours             (void *p);
+#include "BeeTracker.h"
 
 
 int
 main (int argc, char *argv[])
 {
-    if (argc != 4)
+    // Define and parse program options
+    namespace po = boost::program_options;
+    po::options_description desc ("Command line arguments");
+    desc.add_options ()
+        ("help,h", "Print help messages")
+        ("verbose,v", "Verbose")
+        ("threads,t", po::value<unsigned int> (), "Number of threads (0 for unthreaded)")
+        ("frames,f", po::value<unsigned int> (), "Number of frames allocated to each thread")
+        ("input,i", po::value<std::string>()->required (), "Input video file")
+        ("output,o", po::value<std::string>()->required (), "Output csv file");
+
+    po::positional_options_description positionalOptions;
+    positionalOptions.add ("input", 1);
+    positionalOptions.add ("output", 1);
+
+    std::string input;
+    std::string output;
+    unsigned int n_threads = 0;
+    unsigned int frames_per_thread = 1;
+
+    po::variables_map vm;
+    try
     {
-        std::cerr << "Usage: beeshiny VIDEO_IN N_THREADS CSV_OUT" << std::endl;
-        //// Use a proper command line processing system at some stage in the future ...
-        return -1;
-    }
+        po::store (po::parse_command_line (argc, argv, desc), vm);
 
-    // Open the input video
-    cv::VideoCapture cap (argv[1]);
-    if (!cap.isOpened ())
-    {
-        std::cerr << "Couldn't open the video" << std::endl;
-        return -1;
-    }
-
-    write_csv_header (argv[3], argv[2]);
-
-    int frame_count = 0;
-    int bee_identities = 0;
-    std::vector<BeeTag> all_bees;
-    unsigned int n_threads = atoi (argv[2]);
-    std::vector<FindCountoursArgs> args (n_threads);
-
-    // Threads configuration
-    std::vector<pthread_t> threads (n_threads);
-    pthread_attr_t thread_attr;
-    pthread_attr_init (&thread_attr);
-    pthread_attr_setdetachstate (&thread_attr, PTHREAD_CREATE_JOINABLE);
-
-    boost::timer::cpu_timer timer1;
-    boost::timer::cpu_timer timer2;
-    boost::timer::cpu_timer timer3;
-
-    while (true)
-    {
-        // Read frames
-        bool succeed = true;
-        unsigned int frames_read = 0;
-
-        timer1.resume ();
-        for (auto &arg : args)
+        /** --help option */
+        if (vm.count ("help"))
         {
-            arg.n_frames = 0;
-            if (!succeed)
-            {
-                continue;
-            }
-            for (int i = 0; i < FRAMES_PER_THREAD; i++)
-            {
-                succeed = cap.read (arg.frames[i]);
-                if (!succeed)
-                {
-                    break;
-                }
-                arg.n_frames++;
-                frames_read++;
-            }
+            std::cout << "Basic Command Line Parameter App"
+                      << std::endl
+                      << desc
+                      << std::endl;
+            return 0;
         }
-        if (!succeed)
+        // throws on error, so do after help in case there are any problems
+        po::notify (vm);
+
+        if (vm.count ("input"))
         {
-            std::cerr << "Exiting at " << frame_count + frames_read << std::endl;
+            input = vm["input"].as<std::string> ();
         }
-        timer1.stop ();
-
-        // Launch the threads to find the tags in each frame
-        timer2.resume ();
-        for (size_t i = 0; i < n_threads; i++)
+        if (vm.count ("output"))
         {
-            if (pthread_create (threads.data() + i,
-                                &thread_attr,
-                                find_countours,
-                                (void*) (args.data() + i)))
-            {
-                std::cerr << "Failed to create thread " << i << std::endl;
-                exit (1);
-            }
+            output = vm["output"].as<std::string> ();
         }
-
-        // Wait for threads to complete
-        for (auto &thread : threads)
+        if (vm.count ("threads"))
         {
-            pthread_join (thread, NULL);
+            n_threads = vm["threads"].as<unsigned int> ();
         }
-        timer2.stop ();
-
-        timer3.resume ();
-        // Track bees accross frames
-        for (auto &arg : args)
+        if (vm.count ("frames"))
         {
-            if (arg.n_frames == 0)
-            {
-                break;
-            }
-            for (size_t i = 0; i < arg.n_frames; i++)
-            {
-                std::vector<cv::Point2f> &tag_locations = arg.locations[i];
-                std::vector<int> &tag_classifications = arg.classifications[i];
-
-                for (size_t j = 0; j < tag_locations.size (); j++)
-                {
-                    bool new_bee_found = identify_past_location (all_bees,
-                                                                 tag_locations,
-                                                                 tag_classifications,
-                                                                 j, frame_count);
-                    if (new_bee_found)
-                    {
-                        BeeTag new_bee (bee_identities,
-                                        tag_locations[j],
-                                        frame_count,
-                                        tag_classifications[j]);
-                        all_bees.push_back (new_bee);
-                        bee_identities++;
-                    }
-                }
-
-                // Done for this frame, clear the vectors
-                tag_locations.clear ();
-                tag_classifications.clear ();
-
-                //// This could be useful information but it should go to a log file and
-                //// not be printed on every  iterations
-                //// only if verbose mode or debug mode
-                std::cerr << frame_count << " " << all_bees.size () << std::endl;
-                frame_count++;
-
-                // Write results
-                if (frame_count % FRAMES_BEFORE_CLEAR_MEMORY == 0)
-                {
-                    write_csv_chunk (argv[3], all_bees, frame_count);
-                }
-                timer3.stop ();
-            }
-        }
-        if (!succeed)
-        {
-            break;
+            frames_per_thread = vm["frames"].as<unsigned int> ();
         }
     }
-
-    std::cout << "Time spent in reading     : " << timer1.format ();
-    std::cout << "Time spent in segmentation: " << timer2.format ();
-    std::cout << "Time spent in tracking    : " << timer3.format ();
-
-    // Write results
-    write_csv_chunk (argv[3], all_bees, frame_count);
-
-    // Close the movie
-    cap.release ();
-
-    pthread_exit (NULL);
-}
-
-
-static cv::Point2f
-classify_locate_bee (const std::vector<cv::Point> &each_contour,
-                     const cv::Mat &thresh_shape_frame,
-                     int &classify_tag)
-
-{
-    cv::RotatedRect surrounding_rectangle = cv::minAreaRect (cv::Mat(each_contour));
-    cv::Point2f locate = surrounding_rectangle.center;
-
-    if (surrounding_rectangle.size.width < MIN_TAG_CLASSIFICATION_SIZE ||
-        surrounding_rectangle.size.height < MIN_TAG_CLASSIFICATION_SIZE)
+    catch (po::error& e)
     {
-        classify_tag = UNKNOWN_TAG;
-        return locate;
+        std::cerr << "ERROR: "
+                  << e.what ()
+                  << std::endl
+                  << std::endl
+                  << desc
+                  << std::endl;
+        return 1;
     }
 
-    else
-    {
-        if (locate.x - 10 < 0 ||
-            locate.x + 10 > thresh_shape_frame.cols ||
-            locate.y - 10 < 0 ||
-            locate.y + 10 > thresh_shape_frame.rows)
-        {
-            classify_tag = UNKNOWN_TAG;
-            return locate;
-        }
-        else
-        {
-            cv::Rect roi = cv::Rect (locate.x - 10, locate.y - 10, 20, 20);
-            cv::Mat tag_area = thresh_shape_frame (roi);
-            std::vector<std::vector<cv::Point>> contours2;
-            std::vector<cv::Vec4i> hierarchy2;
-            cv::findContours (tag_area, contours2, hierarchy2,
-                              CV_RETR_LIST, CV_CHAIN_APPROX_NONE,
-                              cv::Point (0, 0)); // CV_RETR_EXTERNAL
-            int largest_area = 0;
-            int largest_contour_index;
-            for (size_t i = 0; i < contours2.size (); i++)
-            {
-                //  Find the area of contour
-                float a = contourArea (contours2[i]);
-                if (a > largest_area)
-                {
-                    largest_area = a;
-                    largest_contour_index = i;
-                }
-            }
-            if (largest_area > 1)
-            {
-                cv::RotatedRect surrounding_rectangle2 = cv::minAreaRect (cv::Mat(contours2[largest_contour_index]));
-                if (surrounding_rectangle2.size.width >= surrounding_rectangle2.size.height)
-                {
-                    if (surrounding_rectangle2.size.width < 10)
-                    {
-                        classify_tag = O_TAG;
-                        return locate;
-                    }
-                    else if (surrounding_rectangle2.size.width > 14 &&
-                             surrounding_rectangle2.size.width < 34)
-                    {
-                        classify_tag = I_TAG;
-                        return locate;
-                    }
-                    else
-                    {
-                        classify_tag = UNKNOWN_TAG;
-                        return locate;
-                    }
-                }
-                else 
-                {
-                    if (surrounding_rectangle2.size.height < 10)
-                    {
-                        classify_tag = O_TAG;
-                        return locate;
-                    }
-                    else if (surrounding_rectangle2.size.height > 14 &&
-                             surrounding_rectangle2.size.height < 34)
-                    {
-                        classify_tag = I_TAG;
-                        return locate;
-                    }
-                    else
-                    {
-                        classify_tag = UNKNOWN_TAG;
-                        return locate;
-                    }
-                }
-            }
-            else
-            {
-                classify_tag = QUEEN_TAG;
-                return locate;
-            }
-        }
-    }
+    BeeTracker tracker (input, output, n_threads, frames_per_thread);
+    tracker.track_bees ();
 
-}
-
-static bool
-identify_past_location (std::vector<BeeTag> &all_bees,
-                        std::vector<cv::Point2f> tag_locations,
-                        std::vector<int> tag_classifications,
-                        size_t iterator,
-                        size_t frame_number)
-{
-    if (all_bees.empty ())
-    {
-        return true;
-    }
-
-    cv::Point2f current_tag_contour = tag_locations[iterator];
-    int tag_best_match_position;
-    int best_match_frames_since_last_seen = 1000;
-    float closest_match_distance = 100000;
-    bool found_bee_previously = false;
-    bool have_to_delete_bee = false;
-
-    for (size_t i = 0; i < all_bees.size (); i++)
-    {
-        cv::Point2f last_location_of_bee = all_bees[i].get_last_location ();
-        int frames_since_last_seen = frame_number - all_bees[i].get_last_frame ();
-        bool better_match_available = false;
-        bool bee_too_close_to_other = false;
-        float closeness_of_tag_to_current_contour = distance_between_tags (current_tag_contour,
-                                                                           last_location_of_bee);
-
-        if (closeness_of_tag_to_current_contour < SEARCH_SURROUNDING_AREA &&
-            frames_since_last_seen < FRAMES_BEFORE_EXTINCTION &&
-            !all_bees[i].is_deleted ())
-        {
-            for (size_t j = 0; j < tag_locations.size (); j++)
-            {
-                if (iterator != j)
-                {
-                    float closeness_to_other_tag = distance_between_tags (tag_locations[j],
-                                                                          last_location_of_bee);
-                    if (closeness_to_other_tag < closeness_of_tag_to_current_contour)
-                    {
-                        better_match_available = true;
-                        break;
-                    }
-                    else if (closeness_to_other_tag < MIN_CLOSENESS_BEFORE_DELETE)
-                    {
-                        bee_too_close_to_other = true;
-                    }
-                }
-                
-            }
-            if (!better_match_available &&
-                closeness_of_tag_to_current_contour < closest_match_distance)
-            {
-                tag_best_match_position = i;
-                closest_match_distance = closeness_of_tag_to_current_contour;
-                best_match_frames_since_last_seen = frames_since_last_seen;
-                found_bee_previously = true;
-                if (bee_too_close_to_other)
-                {
-                    have_to_delete_bee = true;
-                    bee_too_close_to_other = false;
-                }
-                else
-                {
-                    have_to_delete_bee = false;
-                }
-            }
-        }
-    }
-
-    int expand_search_radius = (best_match_frames_since_last_seen * SEARCH_EXPANSION_BY_FRAME) + SEARCH_EXPANSION_BY_FRAME;
-    if (found_bee_previously && expand_search_radius > closest_match_distance)
-    {
-        all_bees[tag_best_match_position].add_point (tag_locations[iterator],
-                                                     frame_number,
-                                                     tag_classifications[iterator]);
-        if (have_to_delete_bee)
-        {
-            all_bees[tag_best_match_position].delete_bee ();
-        }
-        return false;
-    }
-    return true;
-}
-
-static float
-distance_between_tags (const cv::Point2f &first_tag,
-                       const cv::Point2f &second_tag)
-{
-    const float delta_x = first_tag.x - second_tag.x;
-    const float delta_y = first_tag.y - second_tag.y;
-    return sqrt (pow (delta_x, 2) + pow (delta_y, 2));
-}
-
-
-static void*
-find_countours (void *p)
-{
-    FindCountoursArgs* args = (FindCountoursArgs*)p;
-    cv::Mat gray_frame;
-    cv::Mat smooth_frame;
-    cv::Mat thresh_frame;
-    cv::Mat thresh_shape;
-    cv::Mat close_element = cv::getStructuringElement (cv::MORPH_RECT,
-                                                       cv::Size (MORPH_TRANSFORM_SIZE,
-                                                                 MORPH_TRANSFORM_SIZE)); //ELLIPSE
-
-    // Tag segmentation: colour to gray conversion, smoothing,closing and blocking reflection and thresholding
-    for (size_t i = 0; i < args->n_frames; i++)
-    {
-        cv::cvtColor (args->frames[i], gray_frame, CV_BGR2GRAY);
-        cv::blur (gray_frame, smooth_frame, cv::Size (3, 3));
-        cv::threshold (smooth_frame, thresh_frame, 90, 255, CV_THRESH_BINARY);
-        cv::morphologyEx (thresh_frame, thresh_frame, cv::MORPH_CLOSE, close_element);
-        cv::threshold (gray_frame, thresh_shape, 150, 255, CV_THRESH_BINARY_INV);
-
-        std::vector<std::vector<cv::Point>> contours;
-        std::vector<cv::Vec4i> hierarchy;
-
-        cv::findContours (thresh_frame, contours, hierarchy,
-                          CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE,
-                          cv::Point (0, 0)); // CV_RETR_LIST
-
-        for (auto &contour : contours)
-        {
-            if (cv::contourArea (contour) > MIN_CONTOUR_AREA)
-            {
-                int classified;
-
-                cv::Point2f located = classify_locate_bee (contour, thresh_shape, classified);
-                args->locations[i].push_back (located);
-                args->classifications[i].push_back (classified);
-            }
-        }
-    }
-    pthread_exit (NULL);
-}
-
-static void
-write_csv_header (const char *csv,
-                  const char *input)
-{
-    std::ofstream output_csv;
-    output_csv.open (csv);
-    time_t _tm =time(NULL );
-    struct tm * curtime = localtime ( &_tm );
-
-    // Metadata as comment
-    output_csv
-        << "# Version: "
-        << VERSION
-        << " File: "
-        << input
-        << " Video date: "
-        << "XXX" //// NEED to extract this from the video
-        << " Processing date: "
-        << asctime (curtime)
-        << std::endl;
-    // Header
-    output_csv
-        << "BeeID,"
-        << "Tag,"
-        << "Frame,"
-        << "X,"
-        << "Y"
-        << std::endl;
-    output_csv.close ();
-}
-
-static void
-write_csv_chunk (const char *csv,
-                 std::vector<BeeTag> &all_bees,
-                 int frame_count)
-{
-    std::ofstream output_csv;
-    output_csv.open (csv, std::ios_base::app);
-
-    for (size_t i = 0; i < all_bees.size (); i++)
-    {
-
-        std::vector<cv::Point2f> every_location_of_bee = all_bees[i].get_locations ();
-        std::vector<int> all_frames_bee_present = all_bees[i].get_frames ();
-        std::vector<int> all_tags_classified = all_bees[i].get_tags ();
-
-        for (size_t j = 0; j < all_frames_bee_present.size (); j++)
-        {
-            output_csv
-                << all_bees[i].get_id ()
-                << ","
-                << all_tags_classified[j]
-                << ","
-                << all_frames_bee_present[j]
-                << ","
-                << every_location_of_bee[j].x
-                << ","
-                << every_location_of_bee[j].y
-                << std::endl;
-        }
-
-    }
-
-    output_csv.close ();
-
-    all_bees.erase (std::remove_if (all_bees.begin (), all_bees.end (), [frame_count](BeeTag &bee) -> bool
-        {
-            int frames_since_last_seen = frame_count - bee.get_last_frame ();
-
-            if (frames_since_last_seen > FRAMES_BEFORE_EXTINCTION)
-            {
-                return true;
-            }
-            else
-            {
-                bee.clear ();
-                return false;
-            }
-        }
-    ), all_bees.end ());
+    return 0;
 }
 
 /* vim:ts=4:sw=4:sts=4:expandtab:
