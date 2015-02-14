@@ -78,6 +78,7 @@ BeeTracker::BeeTracker (const std::string &input_video,
             exit (1);
         }
     }
+    video_reader.set_thread_count (n_threads > 0 ? n_threads : 1);
     if (frames_per_thread < 1)
     {
         std::cerr
@@ -121,11 +122,8 @@ BeeTracker::get_n_threads (void) const
 int
 BeeTracker::track_bees (void)
 {
-    // TODO check that csv path and input path are set or set them in the
-    // constructor
     // Open the input video
-    cap.open (input_path);
-    if (!cap.isOpened ())
+    if (!video_reader.open (input_path))
     {
         std::cerr << "Couldn't open the video" << std::endl;
         return -1;
@@ -170,7 +168,7 @@ BeeTracker::track_bees (void)
     // Write results
     write_csv_chunk ();
     // Close the movie
-    cap.release ();
+    video_reader.close ();
 
     return 0;
 }
@@ -190,7 +188,7 @@ BeeTracker::load_frames (void)
         }
         for (unsigned int i = 0; i < frames_per_thread; i++)
         {
-            success = cap.read (data.frames[i]);
+            success = video_reader.read (data.frames[i]);
             if (!success)
             {
                 break;

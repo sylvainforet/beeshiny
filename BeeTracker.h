@@ -11,6 +11,7 @@
 #include <opencv2/highgui/highgui.hpp>
 
 #include "BeeTag.h"
+#include "VideoReader.h"
 
 
 #define VERSION             1.1
@@ -74,7 +75,7 @@ class BeeTracker
         unsigned int        n_threads = 1;
         unsigned int        frames_per_thread = 10;
         // Frame loading stuff
-        cv::VideoCapture    cap;
+        VideoReader         video_reader;
         std::ofstream       output_stream;
         int                 frame_count = 0;
         // Currently tracked bees
