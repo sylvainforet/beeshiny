@@ -317,13 +317,6 @@ CvCapture_FFMPEG::retrieve_frame (cv::Mat &mat)
         return false;
     }
 
-    //// TODO probably dont need this call (already done in the open function)
-    avpicture_fill ((AVPicture*)&rgb_picture,
-                    rgb_picture.data[0],
-                    PIX_FMT_RGB24,
-                    video_st->codec->width,
-                    video_st->codec->height);
-
     sws_scale (img_convert_ctx,
                picture->data,
                picture->linesize,
