@@ -70,11 +70,7 @@ struct CvCapture_FFMPEG
     void init           (void);
 
     bool grab_frame     (void);
-    bool retrieve_frame (unsigned char **data,
-                         int *step,
-                         int *width,
-                         int *height,
-                         int *cn);
+    bool retrieve_frame (cv::Mat &mat);
 
     AVFormatContext    *ic;
     AVCodec            *avcodec;
@@ -85,7 +81,6 @@ struct CvCapture_FFMPEG
     AVFrame             rgb_picture;
     AVPacket            packet;
     Image_FFMPEG        frame;
-    IplImage            ipl_image;
     struct SwsContext  *img_convert_ctx;
     int64_t             frame_number;
 };
@@ -301,11 +296,7 @@ CvCapture_FFMPEG::grab_frame (void)
 }
 
 bool
-CvCapture_FFMPEG::retrieve_frame (unsigned char** data,
-                                  int* step,
-                                  int* width,
-                                  int* height,
-                                  int* cn)
+CvCapture_FFMPEG::retrieve_frame (cv::Mat &mat)
 {
     if (!video_st || !picture->data[0])
     {
@@ -354,11 +345,10 @@ CvCapture_FFMPEG::retrieve_frame (unsigned char** data,
                rgb_picture.data,
                rgb_picture.linesize);
 
-    *data = frame.data;
-    *step = frame.step;
-    *width = frame.width;
-    *height = frame.height;
-    *cn = frame.cn;
+    IplImage ipl_image;
+    cvInitImageHeader (&ipl_image, cvSize (frame.width, frame.height), 8, frame.cn);
+    cvSetData (&ipl_image, frame.data, frame.step);
+    cv::cvarrToMat (&ipl_image).copyTo (mat);
 
     return true;
 }
@@ -402,28 +392,15 @@ VideoReader::set_thread_count (unsigned int thread_count)
 }
 
 bool
-VideoReader::read (cv::OutputArray image)
+VideoReader::read (cv::Mat &mat)
 {
     if (!ffmpeg->grab_frame ())
     {
         return false;
     }
-    else
+    if (!ffmpeg->retrieve_frame (mat))
     {
-        unsigned char* data = 0;
-        int step = 0;
-        int width = 0;
-        int height = 0;
-        int cn = 0;
-
-        if (!ffmpeg->retrieve_frame (&data, &step, &width, &height, &cn))
-        {
-            return false;
-        }
-        //// TODO can we do without the IplImage?
-        cvInitImageHeader (&ffmpeg->ipl_image, cvSize (width, height), 8, cn);
-        cvSetData (&ffmpeg->ipl_image, data, step);
-        cv::cvarrToMat (&ffmpeg->ipl_image).copyTo (image);
+        return false;
     }
     return true;
 }

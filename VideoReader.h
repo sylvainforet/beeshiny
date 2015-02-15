@@ -24,7 +24,7 @@ class VideoReader
 
         void set_thread_count   (unsigned int thread_count);
 
-        bool read               (cv::OutputArray image);
+        bool read               (cv::Mat &mat);
 
     private:
         CvCapture_FFMPEG *ffmpeg;
