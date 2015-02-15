@@ -212,10 +212,23 @@ CvCapture_FFMPEG::open (const char* filename)
             frame.cn = 3;
             frame.step = rgb_picture.linesize[0];
             frame.data = rgb_picture.data[0];
+
+            img_convert_ctx = sws_getCachedContext (NULL,
+                                                    video_st->codec->width,
+                                                    video_st->codec->height,
+                                                    video_st->codec->pix_fmt,
+                                                    video_st->codec->width,
+                                                    video_st->codec->height,
+                                                    PIX_FMT_BGR24,
+                                                    SWS_BICUBIC,
+                                                    NULL, NULL, NULL);
+            if (!img_convert_ctx)
+            {
+                return false;
+            }
             break;
         }
     }
-
     if (video_stream >= 0)
     {
         valid = true;
@@ -223,8 +236,9 @@ CvCapture_FFMPEG::open (const char* filename)
 
 exit_func:
     if (!valid)
+    {
         close();
-
+    }
     return valid;
 }
 
@@ -309,34 +323,6 @@ CvCapture_FFMPEG::retrieve_frame (cv::Mat &mat)
                     PIX_FMT_RGB24,
                     video_st->codec->width,
                     video_st->codec->height);
-
-    if (img_convert_ctx == NULL ||
-        frame.width != video_st->codec->width ||
-        frame.height != video_st->codec->height)
-    {
-        if (img_convert_ctx)
-        {
-            sws_freeContext (img_convert_ctx);
-        }
-
-        frame.width = video_st->codec->width;
-        frame.height = video_st->codec->height;
-
-        img_convert_ctx = sws_getCachedContext (NULL,
-                                                video_st->codec->width,
-                                                video_st->codec->height,
-                                                video_st->codec->pix_fmt,
-                                                video_st->codec->width,
-                                                video_st->codec->height,
-                                                PIX_FMT_BGR24,
-                                                SWS_BICUBIC,
-                                                NULL, NULL, NULL);
-
-        if (img_convert_ctx == NULL)
-        {
-            return false;
-        }
-    }
 
     sws_scale (img_convert_ctx,
                picture->data,
