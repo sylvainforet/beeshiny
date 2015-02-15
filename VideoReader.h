@@ -9,6 +9,7 @@
 
 #include <opencv2/core/core.hpp>
 
+
 struct CvCapture_FFMPEG;
 
 class VideoReader

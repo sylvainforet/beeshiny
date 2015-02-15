@@ -4,10 +4,12 @@
 
 #include <iostream>
 
+#include <boost/timer/timer.hpp>
+
 #include <opencv2/core/core_c.h>
 
+// ffmpeg headers
 #define __STDC_CONSTANT_MACROS
-
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -28,7 +30,11 @@ extern "C" {
 
 #define MAX_ATTEMPTS (1 << 16)
 
+
 static bool _initialized = false;
+boost::timer::cpu_timer *timer1 = NULL;
+boost::timer::cpu_timer *timer2 = NULL;
+boost::timer::cpu_timer *timer3 = NULL;
 
 class InternalFFMpegRegister
 {
@@ -37,16 +43,22 @@ public:
     {
         if (!_initialized)
         {
+            _initialized = true;
             //avformat_network_init ();
-            /* register all codecs, demux and protocols */
+            // register all codecs, demux and protocols
             av_register_all ();
             //av_log_set_level (AV_LOG_ERROR);
-            _initialized = true;
+            timer1 = new boost::timer::cpu_timer; timer1->stop();
+            timer2 = new boost::timer::cpu_timer; timer2->stop();
+            timer3 = new boost::timer::cpu_timer; timer3->stop();
         }
     }
 
     ~InternalFFMpegRegister ()
     {
+        delete timer1;
+        delete timer2;
+        delete timer3;
         _initialized = false;
     }
 };
@@ -283,10 +295,12 @@ CvCapture_FFMPEG::grab_frame (void)
             continue;
         }
         // Decode video frame
+        timer3->resume ();
         avcodec_decode_video2 (video_st->codec,
                                picture,
                                &got_picture,
                                &packet);
+        timer3->stop ();
         // Did we get a video frame?
         if (got_picture)
         {
@@ -359,6 +373,9 @@ VideoReader::close (void)
 {
     ffmpeg->close ();
     opened = false;
+    std::cout << "Time spent in grabbing frames    : " << timer1->format ();
+    std::cout << "Time spent in decoding frames    : " << timer3->format ();
+    std::cout << "Time spent in retrieveing frames : " << timer2->format ();
 }
 
 void
@@ -373,14 +390,20 @@ VideoReader::set_thread_count (unsigned int thread_count)
 bool
 VideoReader::read (cv::Mat &mat)
 {
+    timer1->resume ();
     if (!ffmpeg->grab_frame ())
     {
+        timer1->stop ();
         return false;
     }
+    timer1->stop ();
+    timer2->resume ();
     if (!ffmpeg->retrieve_frame (mat))
     {
+        timer2->stop ();
         return false;
     }
+    timer2->stop ();
     return true;
 }
 

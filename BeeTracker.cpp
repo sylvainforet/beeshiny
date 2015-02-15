@@ -10,7 +10,6 @@
 #include <time.h>
 
 #include <boost/timer/timer.hpp>
-#include <boost/program_options.hpp>
 
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -138,9 +137,9 @@ BeeTracker::track_bees (void)
 
     frame_count = 0;
 
-    boost::timer::cpu_timer timer1;
-    boost::timer::cpu_timer timer2;
-    boost::timer::cpu_timer timer3;
+    boost::timer::cpu_timer timer1; timer1.stop();
+    boost::timer::cpu_timer timer2; timer2.stop();
+    boost::timer::cpu_timer timer3; timer3.stop();
 
     while (true)
     {
